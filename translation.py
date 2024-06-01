@@ -10,7 +10,7 @@ class JSONFileManagerApp:
         self.json_data = {}
         self.json_frames = {}
         self.file_paths = {}
-        self.current_listbox = None
+        self.selectedKey= ''
 
         self.setup_toolbar()
         self.setup_main_frame()
@@ -73,16 +73,21 @@ class JSONFileManagerApp:
 
         listbox = tk.Listbox(frame)
         listbox.pack(fill=tk.BOTH, expand=True)
+        listbox.bind('<<ListboxSelect>>', self.on_listbox_select)
         listbox.bind('<Double-1>', lambda event, fn=file_name: self.open_edit_window(event, fn))
-        listbox.bind('<Delete>', self.set_current_listbox_and_delete_node)
+        listbox.bind('<Delete>', self.delete_node)
         for key, value in data.items():
             listbox.insert(tk.END, f"{key}: {value}")
 
         self.json_frames[file_name] = (frame, listbox)
 
-    def set_current_listbox_and_delete_node(self, event):
-        self.current_listbox = event.widget
-        self.delete_node()
+    def on_listbox_select(self, event):
+        listbox = event.widget
+        selection = listbox.curselection()
+        if selection:
+            selected_text = listbox.get(selection[0])
+            key, _ = selected_text.split(": ", 1)
+            self.selectedKey = key
 
     def open_edit_window(self, event, file_name):
         listbox = event.widget
@@ -125,15 +130,9 @@ class JSONFileManagerApp:
         self.json_data[file_name][key] = value
         self.display_json_file(file_name, self.json_data[file_name])
 
-    def delete_node(self, event=None):
-        listbox = self.current_listbox
-        if not listbox:
-            return
-
-        selection = listbox.curselection()
-        if selection:
-            selected_text = listbox.get(selection[0])
-            key, _ = selected_text.split(": ", 1)
+    def delete_node(self):        
+        if self.selectedKey:            
+            key = self.selectedKey
             confirm = messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{key}' across all files?")
             if confirm:
                 for fn, data in self.json_data.items():
