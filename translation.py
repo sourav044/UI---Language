@@ -120,15 +120,45 @@ class JSONFileManagerApp:
             ok_button.grid(row=row, column=0, columnspan=2, pady=10)
 
     def add_node(self):
-        file_name = simpledialog.askstring("Input", "Enter the file name:")
-        if file_name not in self.json_data:
-            messagebox.showerror("Error", "File not found.")
-            return
+        # Create a new window for adding a node
+        add_window = tk.Toplevel(self.root)
+        add_window.title("Add Node")
 
-        key = simpledialog.askstring("Input", "Enter the node key:")
-        value = simpledialog.askstring("Input", "Enter the node value:")
-        self.json_data[file_name][key] = value
-        self.display_json_file(file_name, self.json_data[file_name])
+        row = 0
+
+        # Label and entry for the key
+        tk.Label(add_window, text="Key").grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
+        key_entry = tk.Entry(add_window)
+        key_entry.grid(row=row, column=1, padx=10, pady=5)
+        row += 1
+
+        inputs = {}
+
+        # Labels and entries for each file's value
+        for file_name in self.json_data.keys():
+            tk.Label(add_window, text=file_name).grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
+            entry = tk.Entry(add_window)
+            entry.grid(row=row, column=1, padx=10, pady=5)
+            inputs[file_name] = entry
+            row += 1
+
+        def save_node():
+            key = key_entry.get().strip()
+            if not key:
+                messagebox.showerror("Error", "Key cannot be empty.")
+                return
+
+            for file_name, entry in inputs.items():
+                value = entry.get().strip()
+                if value:
+                    self.json_data[file_name][key] = value
+
+            self.refresh_display()
+            add_window.destroy()
+
+        # OK button to save the new node
+        ok_button = tk.Button(add_window, text="OK", command=save_node)
+        ok_button.grid(row=row, column=0, columnspan=2, pady=10)
 
     def delete_node(self):        
         if self.selectedKey:            
