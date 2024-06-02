@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox, simpledialog
 class JSONFileManagerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("JSON File Manager")
+        self.root.title("Multi-Language JSON Editor")
         self.json_data = {}
         self.json_frames = {}
         self.file_paths = {}
@@ -80,6 +80,7 @@ class JSONFileManagerApp:
             listbox.insert(tk.END, f"{key}: {value}")
 
         self.json_frames[file_name] = (frame, listbox)
+        self.refresh_display(file_name)
 
     def on_listbox_select(self, event):
         listbox = event.widget
@@ -97,7 +98,7 @@ class JSONFileManagerApp:
             key, value = selected_text.split(": ", 1)
 
             edit_window = tk.Toplevel(self.root)
-            edit_window.title(f"Edit Values for Key: {key}")
+            edit_window.title(f"Edit Key: {key}")
 
             inputs = {}
             row = 0
@@ -113,7 +114,7 @@ class JSONFileManagerApp:
             def update_values():
                 for fn, entry in inputs.items():
                     self.json_data[fn][key] = entry.get()
-                self.refresh_display()
+                self.refresh_display_all()
                 edit_window.destroy()
 
             ok_button = tk.Button(edit_window, text="OK", command=update_values)
@@ -147,13 +148,19 @@ class JSONFileManagerApp:
             if not key:
                 messagebox.showerror("Error", "Key cannot be empty.")
                 return
+            
+            # Check for duplicate key
+            for data in self.json_data.values():
+                if key in data:
+                    messagebox.showerror("Error", f"Key '{key}' already exists.")
+                    return            
 
             for file_name, entry in inputs.items():
                 value = entry.get().strip()
                 if value:
                     self.json_data[file_name][key] = value
 
-            self.refresh_display()
+            self.refresh_display_all()
             add_window.destroy()
 
         # OK button to save the new node
@@ -168,12 +175,12 @@ class JSONFileManagerApp:
                 for fn, data in self.json_data.items():
                     if key in data:
                         del data[key]
-                self.refresh_display()
+                self.refresh_display_all()
 
     def search_node(self):
         search_key = self.search_entry.get().strip().lower()
         if not search_key:
-            self.refresh_display()
+            self.refresh_display_all()
             return
 
         matched_keys = set()
@@ -209,12 +216,22 @@ class JSONFileManagerApp:
                 if fn == file_name:
                     listbox.insert(tk.END, f"{key}: {value}")
 
-    def refresh_display(self):
-        for file_name, (frame, listbox) in self.json_frames.items():
-            listbox.delete(0, tk.END)
-            data = self.json_data[file_name]
-            for key, value in data.items():
-                listbox.insert(tk.END, f"{key}: {value}")
+    def refresh_display(self, file_name):
+        _, listbox = self.json_frames[file_name]
+        listbox.delete(0, tk.END)
+        data = self.json_data[file_name]
+
+        # Sort keys: alphabetic first, numeric next
+        sorted_keys = sorted(data.keys(), key=lambda x: (not x.isdigit(), x))
+
+        for key in sorted_keys:
+            value = data[key]
+            listbox.insert(tk.END, f"{key}: {value}")
+
+    def refresh_display_all(self):
+        self.search_entry = ''
+        for file_name in self.json_frames.keys():
+            self.refresh_display(file_name) 
 
 if __name__ == "__main__":
     root = tk.Tk()
