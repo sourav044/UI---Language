@@ -1,0 +1,10 @@
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\MainWindow.baml
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\MainWindow.g.cs
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\App.g.cs
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp_MarkupCompile.cache
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.g.resources
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.GeneratedMSBuildEditorConfig.editorconfig
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.AssemblyInfoInputs.cache
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.AssemblyInfo.cs
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.csproj.CoreCompileInputs.cache
+D:\work\CA\UI - Language\ResxEditorApp\obj\Debug\net8.0-windows\ResxEditorApp.sourcelink.json

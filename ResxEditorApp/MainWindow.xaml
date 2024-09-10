@@ -1,0 +1,19 @@
+<Window x:Class="JsonEditor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Multi-Language JSON Editor" Height="450" Width="800">
+    <DockPanel>
+        <!-- Toolbar -->
+        <ToolBar DockPanel.Dock="Top">
+            <Button Content="Load JSON Files" Click="LoadJsonFiles_Click"/>
+            <Button Content="Save JSON Files" Click="SaveJsonFiles_Click"/>
+            <TextBox x:Name="SearchEntry" Width="200" />
+            <Button Content="Search Node" Click="SearchNode_Click"/>
+            <Button Content="Add Node" Click="AddNode_Click"/>
+            <Button Content="Delete Node" Click="DeleteNode_Click"/>
+        </ToolBar>
+
+        <!-- Main content area -->
+        <StackPanel x:Name="MainPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+    </DockPanel>
+</Window>
