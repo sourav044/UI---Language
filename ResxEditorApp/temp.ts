@@ -306,34 +306,41 @@ public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQ
 }
 --------------
 
-    public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQueryable < TModel > query, List < string > propertyNames)
+    public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(
+        this IQueryable < TModel > query, List < string > propertyNames)
 {
     // Return the original query if propertyNames is null or empty
-    if (propertyNames == null || propertyNames.Count == 0)
+    if (propertyNames == null || propertyNames.Count == 0) {
         return query.GroupBy(e => (object)null);
+    }
 
-     Type entityType = typeof (TModel);
+    Type entityType = typeof (TModel);
     var properties = propertyNames
         .Select(name => entityType.GetProperty(name))
         .Where(p => p != null)
         .ToList();
 
-    if (properties.Count == 0)
+    // Return the original query if none of the properties exist on the model
+    if (properties.Count == 0) {
         return query.GroupBy(e => (object)null);
+    }
 
     return GroupByProperties(query, properties);
 }
 
- private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
+private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(
+    IQueryable < TModel > query, List < PropertyInfo > properties)
 {
     var parameter = Expression.Parameter(typeof (TModel), "x");
 
-    // Create an anonymous object as the composite key for multiple properties
-    var keySelector = Expression.New(
-        typeof (ValueTuple).MakeGenericType(properties.Select(p => p.PropertyType).ToArray()),
-        properties.Select(p => Expression.Property(parameter, p))
-    );
+    // Create a dynamic key selector by projecting each property as an object array
+    var propertyAccessExpressions = properties
+        .Select(p => Expression.Convert(Expression.Property(parameter, p), typeof (object)))
+        .ToArray();
 
-    var lambda = Expression.Lambda<Func<TModel, object>>(Expression.Convert(keySelector, typeof (object)), parameter);
+    // Use an array of objects for the key, which EF can work with
+    var keySelector = Expression.NewArrayInit(typeof (object), propertyAccessExpressions);
+
+    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
     return query.GroupBy(lambda).AsQueryable();
 }
