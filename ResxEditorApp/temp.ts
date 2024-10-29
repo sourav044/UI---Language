@@ -304,14 +304,15 @@ public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQ
 
     return method?.MakeGenericMethod(typeArguments);
 }
-
+--------------
 
     public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQueryable < TModel > query, List < string > propertyNames)
 {
+    // Return the original query if propertyNames is null or empty
     if (propertyNames == null || propertyNames.Count == 0)
         return query.GroupBy(e => (object)null);
 
-        Type entityType = typeof (TModel);
+     Type entityType = typeof (TModel);
     var properties = propertyNames
         .Select(name => entityType.GetProperty(name))
         .Where(p => p != null)
@@ -323,22 +324,16 @@ public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQ
     return GroupByProperties(query, properties);
 }
 
-    private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
+ private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
 {
     var parameter = Expression.Parameter(typeof (TModel), "x");
 
-    // Create a composite key using a dictionary for multiple properties
-    var keySelector = Expression.ListInit(
-        Expression.New(typeof (Dictionary<string, object>)),
-        properties.Select(p =>
-            Expression.ElementInit(
-                typeof (Dictionary<string, object>).GetMethod("Add"),
-                Expression.Constant(p.Name),
-                Expression.Convert(Expression.Property(parameter, p), typeof (object))
-            )
-        )
+    // Create an anonymous object as the composite key for multiple properties
+    var keySelector = Expression.New(
+        typeof (ValueTuple).MakeGenericType(properties.Select(p => p.PropertyType).ToArray()),
+        properties.Select(p => Expression.Property(parameter, p))
     );
 
-    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
+    var lambda = Expression.Lambda<Func<TModel, object>>(Expression.Convert(keySelector, typeof (object)), parameter);
     return query.GroupBy(lambda).AsQueryable();
 }
