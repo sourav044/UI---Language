@@ -96,8 +96,8 @@ Copy code
     <li>
         @employeeDto.Employee.Name
         @if (!string.IsNullOrEmpty(employeeDto.DepartmentName)) {
-        <span>- @employeeDto.DepartmentName </span>
-    }
+            <span>- @employeeDto.DepartmentName </span>
+        }
     <button @onclick="() => FetchDepartment(employeeDto.Employee.EmpId)" > Get Department </button>
         </li>
 }
@@ -141,3 +141,43 @@ State: We store employees and their departments in the EmployeeState.
         Reducer: The state is updated with the fetched department information once the API call succeeds.
             Effect: The API call is handled in an effect and dispatched back to the store.
 This approach provides a clean and modular way to handle the fetching and displaying of department data for each individual employee using Blazor's state management concepts.
+
+
+
+
+// GroupBy for multiple property names
+public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>
+    (this IQueryable < TModel > q, List < string > propertyNames)
+{
+    if (propertyNames == null || propertyNames.Count == 0)
+        throw new ArgumentException("Property names cannot be null or empty.", nameof(propertyNames));
+
+Type entityType = typeof (TModel);
+    var properties = propertyNames.Select(name => entityType.GetProperty(name)).ToList();
+MethodInfo m = typeof (QueryableHelper)
+        .GetMethod("GroupByProperties", BindingFlags.NonPublic | BindingFlags.Static)
+        .MakeGenericMethod(entityType, typeof (object));
+    return (IQueryable<IGrouping<object, TModel>>)m.Invoke(null, new object[] { q, properties });
+}
+
+private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel, TKey>
+    (IQueryable < TModel > q, List < PropertyInfo > properties)
+{
+ParameterExpression pe = Expression.Parameter(typeof (TModel), "x");
+
+    // Create an anonymous object as the grouping key, e.g., `new { x.Property1, x.Property2 }`
+    var propertyExpressions = properties
+        .Select(p => Expression.Property(pe, p))
+        .ToArray();
+
+    var keySelector = Expression.New(
+        typeof (Tuple).MakeGenericType(propertyExpressions.Select(e => e.Type).ToArray()),
+        propertyExpressions);
+
+    var lambda = Expression.Lambda<Func<TModel, object>>(Expression.Convert(keySelector, typeof (object)), pe);
+
+    // Call GroupBy on the queryable using the composite key
+    return q.GroupBy(lambda).AsQueryable();
+}
+
+
