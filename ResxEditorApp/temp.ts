@@ -304,3 +304,41 @@ public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQ
 
     return method?.MakeGenericMethod(typeArguments);
 }
+
+
+    public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQueryable < TModel > query, List < string > propertyNames)
+{
+    if (propertyNames == null || propertyNames.Count == 0)
+        return query.GroupBy(e => (object)null);
+
+        Type entityType = typeof (TModel);
+    var properties = propertyNames
+        .Select(name => entityType.GetProperty(name))
+        .Where(p => p != null)
+        .ToList();
+
+    if (properties.Count == 0)
+        return query.GroupBy(e => (object)null);
+
+    return GroupByProperties(query, properties);
+}
+
+    private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
+{
+    var parameter = Expression.Parameter(typeof (TModel), "x");
+
+    // Create a composite key using a dictionary for multiple properties
+    var keySelector = Expression.ListInit(
+        Expression.New(typeof (Dictionary<string, object>)),
+        properties.Select(p =>
+            Expression.ElementInit(
+                typeof (Dictionary<string, object>).GetMethod("Add"),
+                Expression.Constant(p.Name),
+                Expression.Convert(Expression.Property(parameter, p), typeof (object))
+            )
+        )
+    );
+
+    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
+    return query.GroupBy(lambda).AsQueryable();
+}
