@@ -255,3 +255,52 @@ public void GroupBy_WithEmptyList_ThrowsArgumentException()
     // Verify ArgumentException is thrown when no properties are provided
     Assert.Throws<ArgumentException>(() => actors.GroupBy(new List<string>()));
 }
+
+
+public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQueryable < TModel > query, List < string > propertyNames)
+{
+    // Return the original query if propertyNames is null or empty
+    if (propertyNames == null || propertyNames.Count == 0)
+        return query.GroupBy(e => (object)null);
+
+        Type entityType = typeof (TModel);
+    var properties = propertyNames.Select(name => entityType.GetProperty(name))
+        .Where(p => p != null)
+        .ToList();
+
+    // If none of the properties are found, return the original query
+    if (properties.Count == 0)
+        return query.GroupBy(e => (object)null);
+
+        MethodInfo groupByMethod = GetGenericMethod(nameof(GroupByProperties), entityType);
+    return (IQueryable<IGrouping<object, TModel>>)groupByMethod.Invoke(null, new object[] { query, properties });
+}
+
+    private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
+{
+        ParameterExpression parameter = Expression.Parameter(typeof (TModel), "x");
+
+    // Create a composite key with a dictionary for multiple properties
+    var keySelector = Expression.ListInit(
+        Expression.New(typeof (Dictionary<string, object>)),
+        properties.Select(p =>
+            Expression.ElementInit(
+                typeof (Dictionary<string, object>).GetMethod("Add"),
+                Expression.Constant(p.Name),
+                Expression.Convert(Expression.Property(parameter, p), typeof (object))
+            )
+        )
+    );
+
+    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
+    return query.GroupBy(lambda).AsQueryable();
+}
+
+    private static MethodInfo GetGenericMethod(string methodName, params Type[] typeArguments)
+{
+    var method = typeof (QueryableHelper)
+        .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+        .FirstOrDefault(m => m.Name == methodName && m.IsGenericMethod);
+
+    return method?.MakeGenericMethod(typeArguments);
+}
