@@ -156,28 +156,102 @@ Type entityType = typeof (TModel);
     var properties = propertyNames.Select(name => entityType.GetProperty(name)).ToList();
 MethodInfo m = typeof (QueryableHelper)
         .GetMethod("GroupByProperties", BindingFlags.NonPublic | BindingFlags.Static)
-        .MakeGenericMethod(entityType, typeof (object));
+        .MakeGenericMethod(entityType);
     return (IQueryable<IGrouping<object, TModel>>)m.Invoke(null, new object[] { q, properties });
 }
 
-private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel, TKey>
+private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>
     (IQueryable < TModel > q, List < PropertyInfo > properties)
 {
 ParameterExpression pe = Expression.Parameter(typeof (TModel), "x");
 
-    // Create an anonymous object as the grouping key, e.g., `new { x.Property1, x.Property2 }`
-    var propertyExpressions = properties
-        .Select(p => Expression.Property(pe, p))
-        .ToArray();
+    // Create an expression that creates a composite key using a dictionary
+    var keySelector = Expression.ListInit(
+        Expression.New(typeof (Dictionary<string, object>)),
+        properties.Select(p =>
+            Expression.ElementInit(
+                typeof (Dictionary<string, object>).GetMethod("Add"),
+                Expression.Constant(p.Name),
+                Expression.Convert(Expression.Property(pe, p), typeof (object))
+            )
+        )
+    );
 
-    var keySelector = Expression.New(
-        typeof (Tuple).MakeGenericType(propertyExpressions.Select(e => e.Type).ToArray()),
-        propertyExpressions);
-
-    var lambda = Expression.Lambda<Func<TModel, object>>(Expression.Convert(keySelector, typeof (object)), pe);
+    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, pe);
 
     // Call GroupBy on the queryable using the composite key
     return q.GroupBy(lambda).AsQueryable();
 }
 
+private TestDbContext GetDbContext()
+{
+    var options = new DbContextOptionsBuilder<TestDbContext>()
+        .UseInMemoryDatabase(Guid.NewGuid().ToString())
+        .Options;
 
+    var context = new TestDbContext(options);
+    context.Actors.AddRange(
+        new Actor { Id = 1, Name = "John Doe", Category = "A", Age = 30 },
+        new Actor { Id = 2, Name = "Jane Smith", Category = "B", Age = 40 },
+        new Actor { Id = 3, Name = "John Doe", Category = "A", Age = 30 },
+        new Actor { Id = 4, Name = "Jake Blues", Category = "A", Age = 25 },
+        new Actor { Id = 5, Name = "Jane Smith", Category = "B", Age = 35 }
+    );
+    context.SaveChanges();
+    return context;
+}
+
+[Fact]
+public void GroupBy_SingleProperty_ReturnsCorrectGroups()
+{
+    using var context = GetDbContext();
+    var actors = context.Actors.AsQueryable();
+
+    // Group by "Name" property
+    var grouped = actors.GroupBy(new List < string > { "Name" });
+
+    // Verify distinct group count by Name
+    Assert.Equal(3, grouped.Count());
+
+    // Verify group keys
+    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "John Doe");
+    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "Jane Smith");
+    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "Jake Blues");
+}
+
+[Fact]
+public void GroupBy_MultipleProperties_ReturnsCorrectGroups()
+{
+    using var context = GetDbContext();
+    var actors = context.Actors.AsQueryable();
+
+    // Group by "Name" and "Category" properties
+    var grouped = actors.GroupBy(new List < string > { "Name", "Category" });
+
+    // Verify distinct group count by Name and Category
+    Assert.Equal(3, grouped.Count());
+
+    // Verify group keys and values
+    Assert.Contains(grouped, g => {
+        var key = (Dictionary<string, object>)g.Key;
+        return key["Name"].ToString() == "John Doe" && key["Category"].ToString() == "A";
+    });
+    Assert.Contains(grouped, g => {
+        var key = (Dictionary<string, object>)g.Key;
+        return key["Name"].ToString() == "Jane Smith" && key["Category"].ToString() == "B";
+    });
+    Assert.Contains(grouped, g => {
+        var key = (Dictionary<string, object>)g.Key;
+        return key["Name"].ToString() == "Jake Blues" && key["Category"].ToString() == "A";
+    });
+}
+
+[Fact]
+public void GroupBy_WithEmptyList_ThrowsArgumentException()
+{
+    using var context = GetDbContext();
+    var actors = context.Actors.AsQueryable();
+
+    // Verify ArgumentException is thrown when no properties are provided
+    Assert.Throws<ArgumentException>(() => actors.GroupBy(new List<string>()));
+}
