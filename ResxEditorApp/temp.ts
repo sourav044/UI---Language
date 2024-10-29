@@ -333,14 +333,30 @@ private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TMod
 {
     var parameter = Expression.Parameter(typeof (TModel), "x");
 
-    // Create a dynamic key selector by projecting each property as an object array
-    var propertyAccessExpressions = properties
-        .Select(p => Expression.Convert(Expression.Property(parameter, p), typeof (object)))
-        .ToArray();
+    // Build the key selector by handling each property's type individually
+    var propertyAccessExpressions = properties.Select(p => {
+        // Handle Guid
+        if (p.PropertyType == typeof (Guid))
+            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (Guid ?));
 
-    // Use an array of objects for the key, which EF can work with
+        // Handle int
+        if (p.PropertyType == typeof (int))
+            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (int ?));
+
+        // Handle decimal
+        if (p.PropertyType == typeof (decimal))
+            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (decimal ?));
+
+        // Handle string (strings can be left as-is since they are nullable)
+        if (p.PropertyType == typeof (string))
+            return Expression.Property(parameter, p);
+
+        // Default case for other types (convert to nullable)
+        return Expression.Convert(Expression.Property(parameter, p), typeof (object));
+    }).ToArray();
+
+    // Create an array initializer expression for the key selector
     var keySelector = Expression.NewArrayInit(typeof (object), propertyAccessExpressions);
 
     var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
     return query.GroupBy(lambda).AsQueryable();
-}
