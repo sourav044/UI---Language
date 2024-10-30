@@ -143,220 +143,38 @@ State: We store employees and their departments in the EmployeeState.
 This approach provides a clean and modular way to handle the fetching and displaying of department data for each individual employee using Blazor's state management concepts.
 
 
-
-
-// GroupBy for multiple property names
-public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>
-    (this IQueryable < TModel > q, List < string > propertyNames)
+public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
+                this IQueryable < TModel > query,
+                List < ColumnEnum > groupByColumns,
+                Expression < Func < TModel, int >> sumColumn,
+                Expression < Func < TModel, int >> distinctIdColumn,
+                int minTotalAmount, // New parameter for minimum TotalAmount
+                Expression < Func < IGrouping<object, TModel>, TResult >> resultSelector)
+    where TModel: Entity
 {
-    if (propertyNames == null || propertyNames.Count == 0)
-        throw new ArgumentException("Property names cannot be null or empty.", nameof(propertyNames));
+    // Group by conditions based on hard-coded columns
+    IQueryable < IGrouping < object, TModel >> groupedQuery = query;
 
-Type entityType = typeof (TModel);
-    var properties = propertyNames.Select(name => entityType.GetProperty(name)).ToList();
-MethodInfo m = typeof (QueryableHelper)
-        .GetMethod("GroupByProperties", BindingFlags.NonPublic | BindingFlags.Static)
-        .MakeGenericMethod(entityType);
-    return (IQueryable<IGrouping<object, TModel>>)m.Invoke(null, new object[] { q, properties });
-}
+    foreach(var column in groupByColumns)
+    {
+        groupedQuery = column switch
+        {
+            ColumnEnum.OrderId => groupedQuery.GroupBy(e => e.OrderId),
+            ColumnEnum.Item => groupedQuery.GroupBy(e => e.Item),
+            ColumnEnum.Amount => groupedQuery.GroupBy(e => e.Amount),
+            ColumnEnum.CustomerId => groupedQuery.GroupBy(e => e.CustomerId),
+            _ => throw new ArgumentException("Invalid column for grouping")
+        } as IQueryable<IGrouping<object, TModel>>;
+        }
 
-private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>
-    (IQueryable < TModel > q, List < PropertyInfo > properties)
-{
-ParameterExpression pe = Expression.Parameter(typeof (TModel), "x");
+        // Summing and distinct count aggregations with TotalAmount filter
+        var aggregatedQuery = groupedQuery.Select(group => new
+            {
+                GroupKey = group.Key,
+                TotalAmount = group.Sum(sumColumn.Compile()),
+                DistinctCustomerCount = group.Select(distinctIdColumn.Compile()).Distinct().Count()
+            })
+            .Where(g => g.TotalAmount > minTotalAmount); // Filter by minTotalAmount
 
-    // Create an expression that creates a composite key using a dictionary
-    var keySelector = Expression.ListInit(
-        Expression.New(typeof (Dictionary<string, object>)),
-        properties.Select(p =>
-            Expression.ElementInit(
-                typeof (Dictionary<string, object>).GetMethod("Add"),
-                Expression.Constant(p.Name),
-                Expression.Convert(Expression.Property(pe, p), typeof (object))
-            )
-        )
-    );
-
-    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, pe);
-
-    // Call GroupBy on the queryable using the composite key
-    return q.GroupBy(lambda).AsQueryable();
-}
-
-private TestDbContext GetDbContext()
-{
-    var options = new DbContextOptionsBuilder<TestDbContext>()
-        .UseInMemoryDatabase(Guid.NewGuid().ToString())
-        .Options;
-
-    var context = new TestDbContext(options);
-    context.Actors.AddRange(
-        new Actor { Id = 1, Name = "John Doe", Category = "A", Age = 30 },
-        new Actor { Id = 2, Name = "Jane Smith", Category = "B", Age = 40 },
-        new Actor { Id = 3, Name = "John Doe", Category = "A", Age = 30 },
-        new Actor { Id = 4, Name = "Jake Blues", Category = "A", Age = 25 },
-        new Actor { Id = 5, Name = "Jane Smith", Category = "B", Age = 35 }
-    );
-    context.SaveChanges();
-    return context;
-}
-
-[Fact]
-public void GroupBy_SingleProperty_ReturnsCorrectGroups()
-{
-    using var context = GetDbContext();
-    var actors = context.Actors.AsQueryable();
-
-    // Group by "Name" property
-    var grouped = actors.GroupBy(new List < string > { "Name" });
-
-    // Verify distinct group count by Name
-    Assert.Equal(3, grouped.Count());
-
-    // Verify group keys
-    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "John Doe");
-    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "Jane Smith");
-    Assert.Contains(grouped, g => ((Dictionary<string, object>)g.Key)["Name"].ToString() == "Jake Blues");
-}
-
-[Fact]
-public void GroupBy_MultipleProperties_ReturnsCorrectGroups()
-{
-    using var context = GetDbContext();
-    var actors = context.Actors.AsQueryable();
-
-    // Group by "Name" and "Category" properties
-    var grouped = actors.GroupBy(new List < string > { "Name", "Category" });
-
-    // Verify distinct group count by Name and Category
-    Assert.Equal(3, grouped.Count());
-
-    // Verify group keys and values
-    Assert.Contains(grouped, g => {
-        var key = (Dictionary<string, object>)g.Key;
-        return key["Name"].ToString() == "John Doe" && key["Category"].ToString() == "A";
-    });
-    Assert.Contains(grouped, g => {
-        var key = (Dictionary<string, object>)g.Key;
-        return key["Name"].ToString() == "Jane Smith" && key["Category"].ToString() == "B";
-    });
-    Assert.Contains(grouped, g => {
-        var key = (Dictionary<string, object>)g.Key;
-        return key["Name"].ToString() == "Jake Blues" && key["Category"].ToString() == "A";
-    });
-}
-
-[Fact]
-public void GroupBy_WithEmptyList_ThrowsArgumentException()
-{
-    using var context = GetDbContext();
-    var actors = context.Actors.AsQueryable();
-
-    // Verify ArgumentException is thrown when no properties are provided
-    Assert.Throws<ArgumentException>(() => actors.GroupBy(new List<string>()));
-}
-
-
-public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(this IQueryable < TModel > query, List < string > propertyNames)
-{
-    // Return the original query if propertyNames is null or empty
-    if (propertyNames == null || propertyNames.Count == 0)
-        return query.GroupBy(e => (object)null);
-
-        Type entityType = typeof (TModel);
-    var properties = propertyNames.Select(name => entityType.GetProperty(name))
-        .Where(p => p != null)
-        .ToList();
-
-    // If none of the properties are found, return the original query
-    if (properties.Count == 0)
-        return query.GroupBy(e => (object)null);
-
-        MethodInfo groupByMethod = GetGenericMethod(nameof(GroupByProperties), entityType);
-    return (IQueryable<IGrouping<object, TModel>>)groupByMethod.Invoke(null, new object[] { query, properties });
-}
-
-    private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(IQueryable < TModel > query, List < PropertyInfo > properties)
-{
-        ParameterExpression parameter = Expression.Parameter(typeof (TModel), "x");
-
-    // Create a composite key with a dictionary for multiple properties
-    var keySelector = Expression.ListInit(
-        Expression.New(typeof (Dictionary<string, object>)),
-        properties.Select(p =>
-            Expression.ElementInit(
-                typeof (Dictionary<string, object>).GetMethod("Add"),
-                Expression.Constant(p.Name),
-                Expression.Convert(Expression.Property(parameter, p), typeof (object))
-            )
-        )
-    );
-
-    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
-    return query.GroupBy(lambda).AsQueryable();
-}
-
-    private static MethodInfo GetGenericMethod(string methodName, params Type[] typeArguments)
-{
-    var method = typeof (QueryableHelper)
-        .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
-        .FirstOrDefault(m => m.Name == methodName && m.IsGenericMethod);
-
-    return method?.MakeGenericMethod(typeArguments);
-}
---------------
-
-    public static IQueryable < IGrouping < object, TModel >> GroupBy<TModel>(
-        this IQueryable < TModel > query, List < string > propertyNames)
-{
-    // Return the original query if propertyNames is null or empty
-    if (propertyNames == null || propertyNames.Count == 0) {
-        return query.GroupBy(e => (object)null);
+        return aggregatedQuery.Select(resultSelector);
     }
-
-    Type entityType = typeof (TModel);
-    var properties = propertyNames
-        .Select(name => entityType.GetProperty(name))
-        .Where(p => p != null)
-        .ToList();
-
-    // Return the original query if none of the properties exist on the model
-    if (properties.Count == 0) {
-        return query.GroupBy(e => (object)null);
-    }
-
-    return GroupByProperties(query, properties);
-}
-
-private static IQueryable < IGrouping < object, TModel >> GroupByProperties<TModel>(
-    IQueryable < TModel > query, List < PropertyInfo > properties)
-{
-    var parameter = Expression.Parameter(typeof (TModel), "x");
-
-    // Build the key selector by handling each property's type individually
-    var propertyAccessExpressions = properties.Select(p => {
-        // Handle Guid
-        if (p.PropertyType == typeof (Guid))
-            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (Guid ?));
-
-        // Handle int
-        if (p.PropertyType == typeof (int))
-            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (int ?));
-
-        // Handle decimal
-        if (p.PropertyType == typeof (decimal))
-            return (Expression)Expression.Convert(Expression.Property(parameter, p), typeof (decimal ?));
-
-        // Handle string (strings can be left as-is since they are nullable)
-        if (p.PropertyType == typeof (string))
-            return Expression.Property(parameter, p);
-
-        // Default case for other types (convert to nullable)
-        return Expression.Convert(Expression.Property(parameter, p), typeof (object));
-    }).ToArray();
-
-    // Create an array initializer expression for the key selector
-    var keySelector = Expression.NewArrayInit(typeof (object), propertyAccessExpressions);
-
-    var lambda = Expression.Lambda<Func<TModel, object>>(keySelector, parameter);
-    return query.GroupBy(lambda).AsQueryable();
