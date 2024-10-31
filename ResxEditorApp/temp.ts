@@ -285,3 +285,87 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
         // Build and return a lambda expression with the determined property type
         return Expression.Lambda(propertyAccess, parameter);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey>(
+        this IQueryable < IGrouping < TKey, T >> source,
+        string aggregateFunction,
+        string propertyName,
+        string comparisonOperator,
+        double threshold)
+    {
+        // Build a strongly-typed lambda expression for the property selector
+        var propertySelector = BuildLambdaExpression<T>(propertyName, out var propertyType);
+
+        // Define the comparison function based on the operator
+        Func < double, bool > condition = comparisonOperator switch
+        {
+            ">" => value => value > threshold,
+            "<" => value => value < threshold,
+            ">=" => value => value >= threshold,
+            "<=" => value => value <= threshold,
+            "==" => value => value == threshold,
+            "!=" => value => value != threshold,
+            _ => throw new ArgumentException("Invalid comparison operator")
+        };
+
+        // Apply the aggregate function using the strongly-typed lambda expression
+        switch (aggregateFunction.ToLower()) {
+            case "sum":
+                return source.Where(group => condition(Convert.ToDouble(group.Provider.Execute(
+                    Expression.Call(typeof (Queryable), "Sum", new [] { typeof(T), propertyType },
+                        group.Expression, Expression.Quote(propertySelector))))));
+            case "average":
+                return source.Where(group => condition(Convert.ToDouble(group.Provider.Execute(
+                    Expression.Call(typeof (Queryable), "Average", new [] { typeof(T), propertyType },
+                        group.Expression, Expression.Quote(propertySelector))))));
+            case "count":
+                return source.Where(group => condition(group.Count()));
+            case "max":
+                return source.Where(group => condition(Convert.ToDouble(group.Provider.Execute(
+                    Expression.Call(typeof (Queryable), "Max", new [] { typeof(T), propertyType },
+                        group.Expression, Expression.Quote(propertySelector))))));
+            case "min":
+                return source.Where(group => condition(Convert.ToDouble(group.Provider.Execute(
+                    Expression.Call(typeof (Queryable), "Min", new [] { typeof(T), propertyType },
+                        group.Expression, Expression.Quote(propertySelector))))));
+            default:
+                throw new ArgumentException("Invalid aggregate function");
+        }
+    }
+    
+    private static LambdaExpression BuildLambdaExpression<T>(string propertyName, out Type propertyType)
+    {
+        var parameter = Expression.Parameter(typeof (T), "x");
+        Expression propertyAccess = parameter;
+
+        // Traverse properties to handle nested properties
+        foreach(var member in propertyName.Split('.'))
+        {
+            propertyAccess = Expression.PropertyOrField(propertyAccess, member);
+        }
+
+        // Set the property type based on the final resolved property
+        propertyType = propertyAccess.Type;
+
+        // Create a strongly-typed lambda expression based on the actual property type
+        var delegateType = typeof (Func<,>).MakeGenericType(typeof (T), propertyType);
+        return Expression.Lambda(delegateType, propertyAccess, parameter);
+    }
+
