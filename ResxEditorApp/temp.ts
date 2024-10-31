@@ -222,3 +222,37 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
 
         return Expression.Lambda<Func<T, TKey>>(propertyAccess, parameter);
     }
+
+
+
+
+
+
+
+
+
+
+    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey, TAggregate>(
+        this IQueryable < IGrouping < TKey, T >> source,
+        string aggregateFunction,
+        Expression < Func < T, TAggregate >> aggregateSelector,
+        Func < double, bool > condition)
+    {
+        // Compile the aggregateSelector once for reuse
+        var compiledSelector = aggregateSelector.Compile();
+
+        switch (aggregateFunction.ToLower()) {
+            case "sum":
+                return source.Where(group => condition(group.Select(compiledSelector).Sum(Convert.ToDouble)));
+            case "average":
+                return source.Where(group => condition(group.Select(compiledSelector).Average(Convert.ToDouble)));
+            case "count":
+                return source.Where(group => condition(group.Count()));
+            case "max":
+                return source.Where(group => condition(Convert.ToDouble(group.Max(compiledSelector))));
+            case "min":
+                return source.Where(group => condition(Convert.ToDouble(group.Min(compiledSelector))));
+            default:
+                throw new ArgumentException("Invalid aggregate function");
+        }
+    }
