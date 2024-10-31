@@ -227,16 +227,17 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
 
 
 
-
-
-
-    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey, TProperty>(
+    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey>(
         this IQueryable < IGrouping < TKey, T >> source,
         string aggregateFunction,
-        Expression < Func < T, TProperty >> propertySelector,
+        string propertyName,
         string comparisonOperator,
         double threshold)
     {
+        // Build the lambda expression for the property dynamically
+        var propertySelector = BuildLambdaExpression<T>(propertyName, out var propertyType);
+
+        // Compile the lambda expression
         var compiledSelector = propertySelector.Compile();
 
         // Define the comparison based on the operator
@@ -254,9 +255,9 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
         // Apply the aggregate function and the defined condition
         switch (aggregateFunction.ToLower()) {
             case "sum":
-                return source.Where(group => condition(group.Select(compiledSelector).Sum(Convert.ToDouble)));
+                return source.Where(group => condition(Convert.ToDouble(group.Select(compiledSelector).Sum(x => Convert.ChangeType(x, typeof (double))))));
             case "average":
-                return source.Where(group => condition(group.Select(compiledSelector).Average(Convert.ToDouble)));
+                return source.Where(group => condition(Convert.ToDouble(group.Select(compiledSelector).Average(x => Convert.ChangeType(x, typeof (double))))));
             case "count":
                 return source.Where(group => condition(group.Count()));
             case "max":
@@ -266,3 +267,21 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
             default:
                 throw new ArgumentException("Invalid aggregate function");
         }
+    }
+    
+    private static LambdaExpression BuildLambdaExpression<T>(string propertyName, out Type propertyType)
+    {
+        var parameter = Expression.Parameter(typeof (T), "x");
+        Expression propertyAccess = parameter;
+
+        foreach(var member in propertyName.Split('.'))
+        {
+            propertyAccess = Expression.PropertyOrField(propertyAccess, member);
+        }
+
+        // Get the type of the property
+        propertyType = propertyAccess.Type;
+
+        // Build and return a lambda expression with the determined property type
+        return Expression.Lambda(propertyAccess, parameter);
+    }
