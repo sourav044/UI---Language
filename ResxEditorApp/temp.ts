@@ -230,17 +230,28 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
 
 
 
-
-
-    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey, TAggregate>(
+    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey, TProperty>(
         this IQueryable < IGrouping < TKey, T >> source,
         string aggregateFunction,
-        Expression < Func < T, TAggregate >> aggregateSelector,
-        Func < double, bool > condition)
+        Expression < Func < T, TProperty >> propertySelector,
+        string comparisonOperator,
+        double threshold)
     {
-        // Compile the aggregateSelector once for reuse
-        var compiledSelector = aggregateSelector.Compile();
+        var compiledSelector = propertySelector.Compile();
 
+        // Define the comparison based on the operator
+        Func < double, bool > condition = comparisonOperator switch
+        {
+            ">" => value => value > threshold,
+            "<" => value => value < threshold,
+            ">=" => value => value >= threshold,
+            "<=" => value => value <= threshold,
+            "==" => value => value == threshold,
+            "!=" => value => value != threshold,
+            _ => throw new ArgumentException("Invalid comparison operator")
+        };
+
+        // Apply the aggregate function and the defined condition
         switch (aggregateFunction.ToLower()) {
             case "sum":
                 return source.Where(group => condition(group.Select(compiledSelector).Sum(Convert.ToDouble)));
@@ -255,4 +266,3 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
             default:
                 throw new ArgumentException("Invalid aggregate function");
         }
-    }
