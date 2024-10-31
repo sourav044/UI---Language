@@ -178,3 +178,47 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
 
         return aggregatedQuery.Select(resultSelector);
     }
+
+
+    ------------------------
+
+        public static IQueryable < IGrouping < TKey, T >> GroupBy<T, TKey>(
+            this IQueryable < T > source,
+            string keySelector)
+    {
+        var keyExpression = BuildLambdaExpression<T, TKey>(keySelector);
+        return source.GroupBy((Expression<Func<T, TKey>>)keyExpression);
+    }
+    
+    public static IQueryable < IGrouping < TKey, T >> WhereAggregate<T, TKey, TAggregate>(
+        this IQueryable < IGrouping < TKey, T >> source,
+        string aggregateFunction,
+        Expression < Func < IGrouping<TKey, T>, TAggregate >> aggregateSelector,
+        Func < TAggregate, bool > condition)
+    {
+        // Apply aggregate function and filter condition
+        switch (aggregateFunction.ToLower()) {
+            case "sum":
+                return source.Where(group => condition(group.Sum(aggregateSelector)));
+            case "count":
+                return source.Where(group => condition(group.Count()));
+            case "max":
+                return source.Where(group => condition(group.Max(aggregateSelector)));
+            case "min":
+                return source.Where(group => condition(group.Min(aggregateSelector)));
+            case "average":
+                return source.Where(group => condition(group.Average(aggregateSelector)));
+            default:
+                throw new ArgumentException("Invalid aggregate function");
+        }
+    }
+    
+    private static Expression < Func < T, TKey >> BuildLambdaExpression<T, TKey>(string property)
+    {
+        ParameterExpression parameter = Expression.Parameter(typeof (T), "x");
+        Expression propertyAccess = property.Split('.')
+            .Aggregate((Expression)parameter, (acc, propName) =>
+                Expression.PropertyOrField(acc, propName));
+
+        return Expression.Lambda<Func<T, TKey>>(propertyAccess, parameter);
+    }
