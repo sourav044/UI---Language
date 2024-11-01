@@ -384,3 +384,54 @@ private static Expression < Func < T, object >> BuildLambdaExpression<T>(string 
 
             return Expression.Lambda<Func<T, object>>(propertyAccess, parameter);
         }
+
+
+
+
+
+
+
+
+
+
+
+        private Expression < Func < IGrouping<T, ActorSearchIndex>, bool >> BuildAggregateFunctionCheck<T>(
+            IQueryable < IGrouping < T, ActorSearchIndex >> source,
+            SearchCondition condition)
+        {
+            // Parse the condition value to double for comparison
+            if (!double.TryParse(condition.Value, out double targetValue)) {
+                throw new ArgumentException("Invalid value in condition.");
+            }
+
+            // Create parameter for lambda expression
+            var parameter = Expression.Parameter(typeof (IGrouping<T, ActorSearchIndex>), "group");
+
+            // Expression to calculate sum of ShareQty in each group
+            var sumExpression = Expression.Call(
+                typeof (Enumerable),
+                "Sum",
+                new Type[] { typeof(ActorSearchIndex) },
+                parameter,
+                Expression.Lambda<Func<ActorSearchIndex, double>>(Expression.PropertyOrField(Expression.Parameter(typeof (ActorSearchIndex), "a"), "ShareQty"), Expression.Parameter(typeof (ActorSearchIndex), "a"))
+            );
+
+            // Build the condition expression based on the enum value
+            Expression conditionExpression = null;
+            switch (condition.Condition) {
+                case Condition.equal:
+                    conditionExpression = Expression.Equal(sumExpression, Expression.Constant(targetValue));
+                    break;
+                case Condition.less:
+                    conditionExpression = Expression.LessThan(sumExpression, Expression.Constant(targetValue));
+                    break;
+                case Condition.greater:
+                    conditionExpression = Expression.GreaterThan(sumExpression, Expression.Constant(targetValue));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            // Return lambda expression for filtering groups
+            return Expression.Lambda<Func<IGrouping<T, ActorSearchIndex>, bool>>(conditionExpression, parameter);
+        }
