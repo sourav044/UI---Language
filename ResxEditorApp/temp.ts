@@ -357,3 +357,39 @@ public static IQueryable < TResult > GroupByWithAggregates<TModel, TResult>(
             return Expression.Lambda(delegateType, propertyAccess, parameter);
         }
 
+
+
+
+
+
+
+
+
+        public static IQueryable GroupByDynamic<T>(this IQueryable < T > source, string keySelector)
+        {
+        // Get the property info for the key selector property
+        PropertyInfo propertyInfo = typeof (T).GetProperty(keySelector);
+            if (propertyInfo == null) {
+                throw new ArgumentException($"Property '{keySelector}' not found on type '{typeof(T).Name}'.");
+            }
+
+        // Create the parameter expression for "x" in "x => x.Property"
+        ParameterExpression parameter = Expression.Parameter(typeof (T), "x");
+
+        // Create the property access expression for "x.Property"
+        Expression propertyAccess = Expression.Property(parameter, propertyInfo);
+
+            // Create the lambda expression "x => x.Property"
+            var keySelectorLambda = Expression.Lambda(propertyAccess, parameter);
+
+        // Get the generic method definition for Queryable.GroupBy
+        MethodInfo groupByMethod = typeof (Queryable)
+                .GetMethods()
+                .First(m => m.Name == "GroupBy" && m.GetParameters().Length == 2);
+
+        // Make a generic method with TKey matching the property type
+        MethodInfo genericGroupBy = groupByMethod.MakeGenericMethod(typeof (T), propertyInfo.PropertyType);
+
+            // Call GroupBy on the source with the constructed lambda expression
+            return (IQueryable)genericGroupBy.Invoke(null, new object[] { source, keySelectorLambda });
+        }

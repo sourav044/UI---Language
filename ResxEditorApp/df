@@ -1,0 +1,54 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public class ActorSearchIndex
+{
+    public Guid ActorID { get; set; }
+    public int SharesQty { get; set; }
+}
+
+public class QueryService<TKey, TElement>
+{
+    private IQueryable<IGrouping<TKey, TElement>> _source;
+
+    // Constructor takes the grouped query as an input
+    public QueryService(IQueryable<IGrouping<TKey, TElement>> source)
+    {
+        _source = source;
+    }
+
+    // Instance method for filtering based on the provided predicate
+    public IQueryable<IGrouping<TKey, TElement>> WhereAggregate(Func<IGrouping<TKey, TElement>, bool> predicate)
+    {
+        return _source.Where(predicate).AsQueryable();
+    }
+}
+
+public class Example
+{
+    public void FilterQuery(IQueryable<ActorSearchIndex> query)
+    {
+        // Group by ActorID (Guid type here, which serves as TKey)
+        var groupedQuery = query.GroupBy(a => a.ActorID);
+
+        // Instantiate QueryService with grouped data
+        var queryService = new QueryService<Guid, ActorSearchIndex>(groupedQuery);
+
+        // Define the filter predicate
+        Func<IGrouping<Guid, ActorSearchIndex>, bool> filter = group =>
+        {
+            // Example condition: Only groups where any item has SharesQty > 10
+            return group.Any(item => item.SharesQty > 10);
+        };
+
+        // Call the instance method WhereAggregate with the predicate
+        var filteredQuery = queryService.WhereAggregate(filter);
+
+        // Process or display the filtered results
+        foreach (var group in filteredQuery)
+        {
+            Console.WriteLine($"Group ID: {group.Key}, Count: {group.Count()}");
+        }
+    }
+}
