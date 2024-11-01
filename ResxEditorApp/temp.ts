@@ -435,3 +435,101 @@ private static Expression < Func < T, object >> BuildLambdaExpression<T>(string 
             // Return lambda expression for filtering groups
             return Expression.Lambda<Func<IGrouping<T, ActorSearchIndex>, bool>>(conditionExpression, parameter);
         }
+
+
+
+
+
+
+        using System;
+        using System.Linq;
+        using System.Linq.Expressions;
+        using System.Reflection;
+
+        public enum Condition {
+            equal,
+            less,
+            greater
+        }
+
+        public class SearchCondition {
+            public string Value { get; set; }
+            public Condition Condition { get; set; }
+    }
+
+    public class ActorSearchIndex {
+        public decimal? InitQty { get; set; }
+            public double ? ShareQty { get; set; } // Nullable double
+}
+        
+        private Expression < Func < IGrouping<T, ActorSearchIndex>, bool >> BuildAggregateFunctionCheck<T>(
+    IQueryable < IGrouping < T, ActorSearchIndex >> source,
+    SearchCondition condition,
+    string propertyName)
+{
+    // Parse the condition value dynamically to support different numeric types
+    if (!double.TryParse(condition.Value, out double targetValue)) {
+        throw new ArgumentException("Invalid value in condition.");
+    }
+
+    // Get the specified property info from ActorSearchIndex based on propertyName
+    var propertyInfo = typeof (ActorSearchIndex).GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+    if (propertyInfo == null) {
+        throw new ArgumentException($"Property '{propertyName}' not found in ActorSearchIndex.");
+    }
+
+    // Validate the property type to be a nullable numeric type
+    var propertyType = Nullable.GetUnderlyingType(propertyInfo.PropertyType) ?? propertyInfo.PropertyType;
+    if (!typeof (IConvertible).IsAssignableFrom(propertyType)) {
+        throw new ArgumentException("Property must be a nullable numeric type.");
+    }
+
+    // Create parameter for lambda expression
+    var groupParameter = Expression.Parameter(typeof (IGrouping<T, ActorSearchIndex>), "group");
+
+    // Create parameter for ActorSearchIndex items in the group
+    var actorParameter = Expression.Parameter(typeof (ActorSearchIndex), "a");
+
+    // Access the specified property on ActorSearchIndex
+    var propertyAccess = Expression.Property(actorParameter, propertyInfo);
+
+    // Cast the property access to double for comparison, handling nullable types
+    var convertedPropertyAccess = Expression.Convert(propertyAccess, typeof (double ?));
+
+    // Sum expression, summing the specified property within each group
+    var sumExpression = Expression.Call(
+        typeof (Enumerable),
+        "Sum",
+        new Type[] { typeof(ActorSearchIndex) },
+        groupParameter,
+        Expression.Lambda<Func<ActorSearchIndex, double?>>(
+            convertedPropertyAccess,
+            actorParameter
+        )
+    );
+
+    // Convert the sum to double for comparison, handling nullable conversions
+    var convertedSumExpression = Expression.Convert(sumExpression, typeof (double));
+
+    // Target value for comparison as a double constant
+    var targetValueExpression = Expression.Constant(targetValue, typeof (double));
+
+            // Build the condition expression based on the enum value
+            Expression conditionExpression = null;
+    switch (condition.Condition) {
+        case Condition.equal:
+            conditionExpression = Expression.Equal(convertedSumExpression, targetValueExpression);
+            break;
+        case Condition.less:
+            conditionExpression = Expression.LessThan(convertedSumExpression, targetValueExpression);
+            break;
+        case Condition.greater:
+            conditionExpression = Expression.GreaterThan(convertedSumExpression, targetValueExpression);
+            break;
+        default:
+            throw new ArgumentOutOfRangeException();
+    }
+
+    // Return lambda expression for filtering groups
+    return Expression.Lambda<Func<IGrouping<T, ActorSearchIndex>, bool>>(conditionExpression, groupParameter);
+}
