@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ResxEditorApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+67c7e59b043f1e14cd8f510f46726d6f3deaf2ec")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1d4a57564e4f14cac5125f2325111d302762418d")]
 [assembly: System.Reflection.AssemblyProductAttribute("ResxEditorApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ResxEditorApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
