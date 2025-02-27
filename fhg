@@ -1,0 +1,44 @@
+<EditForm class="form-signin mb-4" Model="@_credential" OnValidSubmit="@Authenticate">
+    <DataAnnotationsValidator />
+
+    <div class="form-group">
+        <label for="user-name">User Name</label>
+        <FluentTextField Class="form-control" Id="user-name" Placeholder="Enter username"
+            Value="@_credential.UserName"
+            ValueChanged="@((string val) => UpdateUserName(val))" />
+    </div>
+
+    <div class="form-group">
+        <label for="password">Password</label>
+        <FluentTextField Type="password" Class="form-control" Id="password" Placeholder="Password"
+            Value="@_credential.Password"
+            ValueChanged="@((string val) => UpdatePassword(val))" />
+    </div>
+
+    <ValidationSummary />
+
+    <div class="form-group">
+        <FluentButton Type="submit" Id="login" Appearance="Primary">Login</FluentButton>
+    </div>
+</EditForm>
+
+@code {
+    private CredentialModel _credential = new();
+
+    private void UpdateUserName(string value)
+    {
+        _credential.UserName = value;
+        StateHasChanged(); // Force UI update immediately
+    }
+
+    private void UpdatePassword(string value)
+    {
+        _credential.Password = value;
+        StateHasChanged(); // Ensure the password updates before submission
+    }
+
+    private async Task Authenticate()
+    {
+        Console.WriteLine($"User: {_credential.UserName}, Password: {_credential.Password}");
+        // Your authentication logic
+    }
